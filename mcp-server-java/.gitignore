@@ -1,10 +1,8 @@
 # Maven build output
 target/
-**/target/
 
 # IDE — IntelliJ IDEA
 .idea/
-**/.idea/
 *.iml
 *.iws
 *.ipr
@@ -12,7 +10,6 @@ out/
 
 # IDE — VS Code
 .vscode/
-**/.vscode/
 
 # IDE — Eclipse
 .classpath
@@ -27,9 +24,11 @@ bin/
 # Java
 *.class
 *.jar
+!target/mcp-server-java-*.jar
 
 # Logs
 *.log
+/tmp/
 
 # Spring Boot dev files
 spring-shell.log

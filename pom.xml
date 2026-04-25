@@ -4,6 +4,7 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
+    <!-- Inherit Spring Boot's dependency management -->
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
@@ -12,10 +13,11 @@
     </parent>
 
     <groupId>com.jimmy</groupId>
-    <artifactId>mcp-server-java</artifactId>
+    <artifactId>java-mcp-parent</artifactId>
     <version>0.1.0</version>
-    <name>mcp-server-java</name>
-    <description>Minimal MCP server (stdio) written in Java/Spring Boot</description>
+    <packaging>pom</packaging>
+    <name>java-mcp-parent</name>
+    <description>Parent POM for the Java MCP project</description>
 
     <properties>
         <java.version>21</java.version>
@@ -24,36 +26,8 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
-    <dependencies>
-        <!-- Spring Boot core — no web starter. We want a plain CLI app. -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter</artifactId>
-        </dependency>
-
-        <!-- Jackson is already transitively included, declared explicitly for clarity -->
-        <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
-            <artifactId>jackson-databind</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-                <configuration>
-                    <!-- Package as executable fat-jar for `java -jar` -->
-                    <mainClass>com.jimmy.mcp.McpServerApplication</mainClass>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
+    <modules>
+        <module>mcp-spring-boot-starter</module>
+        <module>mcp-server-java</module>
+    </modules>
 </project>
