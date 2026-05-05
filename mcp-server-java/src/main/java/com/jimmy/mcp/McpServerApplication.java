@@ -2,6 +2,7 @@ package com.jimmy.mcp;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 
 /**
  * Sample MCP server built with mcp-spring-boot-starter.
@@ -13,6 +14,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * the starter discovers and registers it automatically.
  */
 @SpringBootApplication
+@ConfigurationPropertiesScan
 public class McpServerApplication {
 
     public static void main(String[] args) {

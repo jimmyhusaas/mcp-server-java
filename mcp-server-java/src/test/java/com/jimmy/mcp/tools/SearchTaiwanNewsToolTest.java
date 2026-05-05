@@ -45,7 +45,7 @@ class SearchTaiwanNewsToolTest {
     void setUp() {
         mapper = new ObjectMapper();
         // Override fetchXml to avoid real HTTP calls in unit tests
-        tool = new SearchTaiwanNewsTool("http://unused-in-tests") {
+        tool = new SearchTaiwanNewsTool(List.of("http://unused-in-tests")) {
             @Override
             protected String fetchXml(String url) throws Exception {
                 return FIXTURE_XML;
@@ -144,7 +144,7 @@ class SearchTaiwanNewsToolTest {
         JsonNode args = json("{\"keyword\": \"CNA\"}");
         // fixture links contain "cna.com.tw" — keyword in description match (lowercase)
         // This tests that the match is case-insensitive
-        SearchTaiwanNewsTool caseTestTool = new SearchTaiwanNewsTool("unused") {
+        SearchTaiwanNewsTool caseTestTool = new SearchTaiwanNewsTool(List.of("unused")) {
             @Override
             protected String fetchXml(String url) throws Exception {
                 return """
@@ -254,7 +254,7 @@ class SearchTaiwanNewsToolTest {
 
     @Test
     void execute_fetchThrows_returnsErrorMessage() {
-        SearchTaiwanNewsTool failingTool = new SearchTaiwanNewsTool("unused") {
+        SearchTaiwanNewsTool failingTool = new SearchTaiwanNewsTool(List.of("unused")) {
             @Override
             protected String fetchXml(String url) throws Exception {
                 throw new java.io.IOException("connection refused");
@@ -264,7 +264,7 @@ class SearchTaiwanNewsToolTest {
         JsonNode args = json("{\"keyword\": \"台灣\"}");
         String result = failingTool.execute(args);
 
-        assertThat(result).contains("取得新聞失敗");
+        assertThat(result).contains("找不到");
         assertThat(result).contains("connection refused");
     }
 }
