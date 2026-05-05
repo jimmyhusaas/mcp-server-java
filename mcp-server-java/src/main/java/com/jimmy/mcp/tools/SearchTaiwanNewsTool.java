@@ -11,30 +11,39 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Searches Taiwan news by keyword using CNA (中央社) RSS feed.
- * Fetches the general news feed and filters items whose title or description
- * contains the keyword (case-insensitive).
+ * Searches Taiwan news by keyword using one or more configurable RSS feeds.
+ *
+ * <p>Configure sources in {@code application.properties}:
+ * <pre>
+ * mcp.tools.news.rss-urls[0]=https://news.ltn.com.tw/rss/all.xml
+ * mcp.tools.news.rss-urls[1]=https://news.pts.org.tw/rss.xml
+ * </pre>
+ *
+ * <p>Results from all sources are aggregated and deduplicated by title.
  */
 @Component
 public class SearchTaiwanNewsTool implements McpTool {
 
-    private static final String LTN_RSS_URL = "https://news.ltn.com.tw/rss/all.xml";
     private static final int DEFAULT_LIMIT = 5;
     private static final int MAX_LIMIT = 20;
 
-    private final String rssUrl;
+    private final List<String> rssUrls;
 
-    public SearchTaiwanNewsTool() {
-        this(LTN_RSS_URL);
+    /** Spring constructor — injects configured RSS URLs. */
+    public SearchTaiwanNewsTool(NewsToolProperties props) {
+        this(props.getRssUrls());
     }
 
-    SearchTaiwanNewsTool(String rssUrl) {
-        this.rssUrl = rssUrl;
+    /** Package-private constructor for unit tests. */
+    SearchTaiwanNewsTool(List<String> rssUrls) {
+        this.rssUrls = rssUrls;
     }
 
     @Override
@@ -44,7 +53,7 @@ public class SearchTaiwanNewsTool implements McpTool {
 
     @Override
     public String getDescription() {
-        return "搜尋台灣即時新聞（自由時報 RSS）。輸入關鍵字，返回符合的新聞標題、連結與摘要。";
+        return "搜尋台灣即時新聞。輸入關鍵字，返回符合的新聞標題、連結與摘要。";
     }
 
     @Override
@@ -82,30 +91,46 @@ public class SearchTaiwanNewsTool implements McpTool {
         int limit = args.path("limit").asInt(DEFAULT_LIMIT);
         limit = Math.max(1, Math.min(limit, MAX_LIMIT));
 
-        try {
-            String xml = fetchXml(rssUrl);
-            List<String[]> items = parseMatchingItems(xml, keyword, limit);
+        List<String[]> results = new ArrayList<>();
+        Set<String> seenTitles = new LinkedHashSet<>();
+        List<String> errors = new ArrayList<>();
 
-            if (items.isEmpty()) {
-                return "找不到包含「" + keyword + "」的新聞";
-            }
-
-            StringBuilder sb = new StringBuilder();
-            sb.append("找到 ").append(items.size()).append(" 則「").append(keyword).append("」相關新聞：\n\n");
-            for (int i = 0; i < items.size(); i++) {
-                String[] item = items.get(i);
-                sb.append(i + 1).append(". ").append(item[0]).append("\n");
-                sb.append("   ").append(item[1]).append("\n");
-                if (!item[2].isEmpty()) {
-                    sb.append("   ").append(item[2]).append("\n");
+        for (String url : rssUrls) {
+            try {
+                String xml = fetchXml(url);
+                List<String[]> items = parseMatchingItems(xml, keyword, limit - results.size());
+                for (String[] item : items) {
+                    // deduplicate by title across sources
+                    if (seenTitles.add(item[0])) {
+                        results.add(item);
+                    }
                 }
-                sb.append("   發布時間：").append(item[3]).append("\n\n");
+            } catch (Exception e) {
+                errors.add(url + "：" + e.getMessage());
             }
-            return sb.toString().trim();
-
-        } catch (Exception e) {
-            return "取得新聞失敗：" + e.getMessage();
+            if (results.size() >= limit) break;
         }
+
+        if (results.isEmpty()) {
+            String base = "找不到包含「" + keyword + "」的新聞";
+            return errors.isEmpty() ? base : base + "\n（部分來源失敗：" + String.join("、", errors) + "）";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("找到 ").append(results.size()).append(" 則「").append(keyword).append("」相關新聞：\n\n");
+        for (int i = 0; i < results.size(); i++) {
+            String[] item = results.get(i);
+            sb.append(i + 1).append(". ").append(item[0]).append("\n");
+            sb.append("   ").append(item[1]).append("\n");
+            if (!item[2].isEmpty()) {
+                sb.append("   ").append(item[2]).append("\n");
+            }
+            sb.append("   發布時間：").append(item[3]).append("\n\n");
+        }
+        if (!errors.isEmpty()) {
+            sb.append("（部分來源失敗：").append(String.join("、", errors)).append("）");
+        }
+        return sb.toString().trim();
     }
 
     protected String fetchXml(String url) throws Exception {
@@ -144,7 +169,6 @@ public class SearchTaiwanNewsTool implements McpTool {
             String desc    = extractField(itemBody, "description");
             String pubDate = extractField(itemBody, "pubDate");
 
-            // Strip any remaining HTML tags and decode common entities
             String cleanTitle = stripHtml(title);
             String cleanDesc  = stripHtml(desc);
 
