@@ -2,6 +2,7 @@ package com.jimmy.mcp.tools;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.net.URI;
@@ -37,6 +38,7 @@ public class SearchTaiwanNewsTool implements McpTool {
     private final List<String> rssUrls;
 
     /** Spring constructor — injects configured RSS URLs. */
+    @Autowired
     public SearchTaiwanNewsTool(NewsToolProperties props) {
         this(props.getRssUrls());
     }
@@ -146,28 +148,44 @@ public class SearchTaiwanNewsTool implements McpTool {
         return client.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)).body();
     }
 
+    // RSS 2.0: <item>...</item>
     private static final Pattern ITEM_PATTERN =
             Pattern.compile("(?s)<item[^>]*>(.*?)</item>");
+    // Atom: <entry>...</entry>
+    private static final Pattern ENTRY_PATTERN =
+            Pattern.compile("(?s)<entry[^>]*>(.*?)</entry>");
+    // RSS fields: title, link (text content), description, pubDate
     private static final Pattern FIELD_PATTERN =
-            Pattern.compile("(?s)<(title|link|description|pubDate)[^>]*>(?:<!\\[CDATA\\[)?(.*?)(?:]]>)?</\\1>");
+            Pattern.compile("(?s)<(title|link|description|pubDate|summary|updated)[^>]*>(?:<!\\[CDATA\\[)?(.*?)(?:]]>)?</\\1>");
+    // Atom link: <link rel="alternate" href="URL"/>
+    private static final Pattern ATOM_LINK_PATTERN =
+            Pattern.compile("<link[^>]+href=\"([^\"]+)\"[^>]*/>");
 
     /**
-     * Extracts RSS items using regex instead of a DOM parser so that malformed HTML
-     * inside {@code <description>} fields (e.g. unclosed {@code <br>} tags, HTML
-     * entities like {@code &nbsp;}) never causes a parse error.
+     * Extracts news items from either RSS 2.0 ({@code <item>}) or Atom ({@code <entry>})
+     * feeds using regex, so malformed HTML inside description fields never causes errors.
      */
     List<String[]> parseMatchingItems(String xml, String keyword, int limit) {
         String lowerKeyword = keyword.toLowerCase();
         List<String[]> results = new ArrayList<>();
 
-        Matcher items = ITEM_PATTERN.matcher(xml);
+        // Detect format: prefer RSS items, fall back to Atom entries
+        Pattern entryPattern = xml.contains("<item") ? ITEM_PATTERN : ENTRY_PATTERN;
+        boolean isAtom = entryPattern == ENTRY_PATTERN;
+
+        Matcher items = entryPattern.matcher(xml);
         while (items.find() && results.size() < limit) {
             String itemBody = items.group(1);
 
             String title   = extractField(itemBody, "title");
-            String link    = extractField(itemBody, "link");
-            String desc    = extractField(itemBody, "description");
-            String pubDate = extractField(itemBody, "pubDate");
+            // Atom uses <link href="..."/> self-closing; RSS uses <link>URL</link>
+            String link    = isAtom ? extractAtomLink(itemBody) : extractField(itemBody, "link");
+            // Atom uses <summary>; RSS uses <description>
+            String desc    = isAtom ? extractField(itemBody, "summary")
+                                    : extractField(itemBody, "description");
+            // Atom uses <updated>; RSS uses <pubDate>
+            String pubDate = isAtom ? extractField(itemBody, "updated")
+                                    : extractField(itemBody, "pubDate");
 
             String cleanTitle = stripHtml(title);
             String cleanDesc  = stripHtml(desc);
@@ -181,6 +199,11 @@ public class SearchTaiwanNewsTool implements McpTool {
             }
         }
         return results;
+    }
+
+    private static String extractAtomLink(String entryBody) {
+        Matcher m = ATOM_LINK_PATTERN.matcher(entryBody);
+        return m.find() ? m.group(1) : "";
     }
 
     private static String extractField(String itemBody, String tag) {
