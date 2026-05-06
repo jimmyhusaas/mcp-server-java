@@ -250,6 +250,37 @@ class SearchTaiwanNewsToolTest {
         assertThat(items).hasSize(1);
     }
 
+    // ---- Atom feed support ----
+
+    @Test
+    void parseMatchingItems_atomFeed_parsesEntries() {
+        String atomXml = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <feed xmlns="http://www.w3.org/2005/Atom">
+                  <title>公視新聞網</title>
+                  <entry>
+                    <title><![CDATA[台灣科技廠商宣布重大突破]]></title>
+                    <link rel="alternate" href="https://news.pts.org.tw/article/123"/>
+                    <summary type="html"><![CDATA[台灣半導體廠商發表聲明，宣布新製程量產。]]></summary>
+                    <updated>2026-05-05T10:00:00+08:00</updated>
+                  </entry>
+                  <entry>
+                    <title><![CDATA[今日天氣晴朗]]></title>
+                    <link rel="alternate" href="https://news.pts.org.tw/article/124"/>
+                    <summary type="html"><![CDATA[氣象局預報各地晴朗。]]></summary>
+                    <updated>2026-05-05T09:00:00+08:00</updated>
+                  </entry>
+                </feed>
+                """;
+
+        List<String[]> items = tool.parseMatchingItems(atomXml, "科技", 5);
+
+        assertThat(items).hasSize(1);
+        assertThat(items.get(0)[0]).contains("科技");
+        assertThat(items.get(0)[1]).contains("pts.org.tw");
+        assertThat(items.get(0)[3]).contains("2026-05-05");
+    }
+
     // ---- fetchXml error handling ----
 
     @Test

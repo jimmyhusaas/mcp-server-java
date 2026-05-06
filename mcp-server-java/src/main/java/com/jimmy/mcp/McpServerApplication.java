@@ -1,8 +1,9 @@
 package com.jimmy.mcp;
 
+import com.jimmy.mcp.tools.NewsToolProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 
 /**
  * Sample MCP server built with mcp-spring-boot-starter.
@@ -14,7 +15,7 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
  * the starter discovers and registers it automatically.
  */
 @SpringBootApplication
-@ConfigurationPropertiesScan
+@EnableConfigurationProperties(NewsToolProperties.class)
 public class McpServerApplication {
 
     public static void main(String[] args) {
