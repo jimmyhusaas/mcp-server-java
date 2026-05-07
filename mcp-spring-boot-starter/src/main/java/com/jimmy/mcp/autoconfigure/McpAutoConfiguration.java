@@ -3,10 +3,12 @@ package com.jimmy.mcp.autoconfigure;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jimmy.mcp.server.McpServer;
 import com.jimmy.mcp.server.RequestHandler;
+import com.jimmy.mcp.server.SseMcpServer;
 import com.jimmy.mcp.server.ToolRegistry;
 import com.jimmy.mcp.tools.McpTool;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 
@@ -65,12 +67,25 @@ public class McpAutoConfiguration {
     }
 
     /**
-     * Stdio transport. Implements {@link org.springframework.boot.CommandLineRunner}
-     * so Spring Boot starts the JSON-RPC read loop automatically.
+     * Stdio transport (default). Reads JSON-RPC from stdin, writes to stdout.
+     * Active when {@code mcp.server.transport=stdio} or property is not set.
      */
     @Bean
-    @ConditionalOnMissingBean
+    @ConditionalOnMissingBean(McpServer.class)
+    @ConditionalOnProperty(name = "mcp.server.transport", havingValue = "stdio", matchIfMissing = true)
     public McpServer mcpServer(RequestHandler requestHandler, ObjectMapper mapper) {
         return new McpServer(requestHandler, mapper);
+    }
+
+    /**
+     * SSE transport. Exposes {@code GET /sse} and {@code POST /message} HTTP endpoints.
+     * Active when {@code mcp.server.transport=sse} is set.
+     * Also requires {@code spring.main.web-application-type=servlet} (i.e. do NOT set it to {@code none}).
+     */
+    @Bean
+    @ConditionalOnMissingBean(SseMcpServer.class)
+    @ConditionalOnProperty(name = "mcp.server.transport", havingValue = "sse")
+    public SseMcpServer sseMcpServer(RequestHandler requestHandler, ObjectMapper mapper) {
+        return new SseMcpServer(requestHandler, mapper);
     }
 }
