@@ -84,7 +84,18 @@ public class SearchCnaTool implements McpTool {
             return "解析中央社回應失敗：" + e.getMessage();
         }
 
-        if (results.isEmpty()) return "找不到包含「" + keyword + "」的中央社新聞";
+        if (results.isEmpty()) {
+            // Debug: show first raw item so we can verify field names
+            try {
+                JsonNode root = MAPPER.readTree(json);
+                JsonNode items = findItemsArray(root);
+                if (items != null && items.size() > 0) {
+                    return "找不到包含「" + keyword + "」的中央社新聞\n\n[除錯] 第一筆原始資料（供確認欄位名稱）：\n"
+                            + MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(items.get(0));
+                }
+            } catch (Exception ignored) {}
+            return "找不到包含「" + keyword + "」的中央社新聞";
+        }
 
         StringBuilder sb = new StringBuilder();
         sb.append("找到 ").append(results.size()).append(" 則「").append(keyword).append("」相關中央社新聞：\n\n");
