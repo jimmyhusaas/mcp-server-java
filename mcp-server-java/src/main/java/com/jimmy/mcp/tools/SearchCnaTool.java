@@ -23,8 +23,8 @@ import java.util.List;
 @Component
 public class SearchCnaTool implements McpTool {
 
-    static final String API_URL =
-            "https://www.cna.com.tw/cna2018api/api/WNewsFeed?action=0&category=aall&cnt=30";
+    static final String API_URL = "https://www.cna.com.tw/cna2018api/api/WNewsList";
+    static final String API_BODY = "{\"action\":\"0\",\"category\":\"aall\",\"pagesize\":30,\"pageidx\":1}";
     private static final String BASE_URL = "https://www.cna.com.tw";
     private static final int DEFAULT_LIMIT = 5;
     private static final int MAX_LIMIT = 20;
@@ -72,7 +72,7 @@ public class SearchCnaTool implements McpTool {
 
         String json;
         try {
-            json = fetchJson(API_URL);
+            json = fetchJson(API_URL, API_BODY);
         } catch (Exception e) {
             return "無法連線至中央社：" + e.getMessage();
         }
@@ -98,7 +98,7 @@ public class SearchCnaTool implements McpTool {
         return sb.toString().trim();
     }
 
-    protected String fetchJson(String url) throws Exception {
+    protected String fetchJson(String url, String body) throws Exception {
         HttpClient client = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
                 .build();
@@ -106,8 +106,9 @@ public class SearchCnaTool implements McpTool {
                 .uri(URI.create(url))
                 .timeout(Duration.ofSeconds(15))
                 .header("User-Agent", "mcp-server-java/0.1.0")
+                .header("Content-Type", "application/json")
                 .header("Accept", "application/json")
-                .GET()
+                .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
                 .build();
         HttpResponse<String> response =
                 client.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));

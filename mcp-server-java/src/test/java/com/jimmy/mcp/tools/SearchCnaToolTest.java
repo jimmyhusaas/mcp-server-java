@@ -67,7 +67,7 @@ class SearchCnaToolTest {
     void setUp() {
         tool = new SearchCnaTool() {
             @Override
-            protected String fetchJson(String url) {
+            protected String fetchJson(String url, String body) {
                 return FIXTURE_JSON;
             }
         };
