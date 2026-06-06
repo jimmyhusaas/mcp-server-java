@@ -1,6 +1,6 @@
-# Java MCP — Spring Boot Starter for Model Context Protocol
+# Java MCP — Enterprise AI Integration for Spring Boot
 
-Give any Spring Boot app the ability to expose tools to AI models (Claude, Cursor, Zed…) in under 5 minutes.
+AI models need access to your data to be useful. Your data lives in Java systems that have been running for years. This project bridges the two — without rewriting your backend, without sending data to third-party pipelines, and without losing control of what the AI can access.
 
 ```xml
 <repositories>
@@ -19,14 +19,89 @@ Give any Spring Boot app the ability to expose tools to AI models (Claude, Curso
 
 ---
 
-## What is MCP?
+## The Problem with AI Integration in Enterprise Java
 
-[Model Context Protocol](https://modelcontextprotocol.io) is an open standard by Anthropic that defines how AI models call external tools. Think of it as the REST API standard for AI — implement it once, and any MCP-compatible client (Claude Desktop, Cursor, Zed…) can call your tools.
+Python has LangChain, CrewAI, and AutoGen. Java has almost nothing native.
 
-## Why Java?
+Yet 20–30% of enterprise backends — banking, insurance, telecom, manufacturing, healthcare, government — run on Java. These systems hold the most valuable data and face the strictest compliance requirements. They also have the most to gain from AI.
 
-Python already has LangChain, CrewAI, AutoGen. Java has almost nothing native.  
-Yet Java runs 20–30% of enterprise backends — financial services, insurance, telco, manufacturing — all of which need AI integration. This project fills that gap.
+The typical workarounds all have the same problem:
+
+| Workaround | Cost |
+|---|---|
+| Rewrite logic in Python | Two stacks to maintain, months of work, compliance re-review |
+| Expose everything via new REST APIs | Security surface expands, deployment overhead, often blocked |
+| Use a cloud AI pipeline | Data leaves your infrastructure — unacceptable in regulated industries |
+
+---
+
+## What This Project Gives You
+
+A single Spring Boot dependency that turns any Java method into an AI-callable tool — while keeping your data exactly where it already is.
+
+Implement one interface, annotate with `@Component`, rebuild. That's the entire integration:
+
+```java
+@Component
+public class QueryOrderTool implements McpTool {
+
+    @Autowired private OrderRepository orders;
+
+    @Override
+    public String getName() { return "query_order"; }
+
+    @Override
+    public String getDescription() {
+        return "Look up an order by ID and return its current status and line items.";
+    }
+
+    @Override
+    public String execute(JsonNode args) {
+        String orderId = args.path("orderId").asText();
+        return orders.findById(orderId)
+                     .map(Order::toSummary)
+                     .orElse("Order not found: " + orderId);
+    }
+
+    @Override
+    public JsonNode getInputSchema() { /* ... */ }
+}
+```
+
+The AI can now answer "What's the status of order #12345?" by calling your existing repository. Your JPA layer, your business rules, your Spring Security — all unchanged.
+
+---
+
+## Security Model
+
+MCP is a permission boundary, not a passthrough.
+
+**You decide what the AI can access.** Each `McpTool` you implement is an explicit gate. If you don't open it, the AI cannot reach it — not your database, not your internal APIs, not your file system.
+
+**Data stays on your infrastructure.** The MCP server runs as a process on your own hardware or VMs. Nothing is sent to a third-party pipeline before it reaches your code.
+
+**Every AI call is a Java method call.** That means Spring Security, `@Transactional`, rate limiting, and audit logging all apply exactly as they do today. There is no new security model to learn.
+
+**Zero implicit access.** Claude cannot infer or guess its way into your system. It can only call tools you explicitly wrote.
+
+---
+
+## Enterprise Use Cases
+
+**Financial services — real-time queries without a new API layer**
+Your core banking system has 15 years of Java business rules. Wrap key read operations as MCP tools. Risk officers ask "What's our current exposure to sector X?" — the query hits your system, the answer never passes through a third party.
+
+**Healthcare / 健保 — compliant data access**
+Patient data never leaves your on-prem JVM. Tools return only what a specific role is allowed to see, enforced by your existing Spring Security configuration. The compliance boundary is the same one you already maintain.
+
+**Insurance — underwriting assistant**
+Wrap your policy lookup, claims history, and risk scoring services. Underwriters get AI-assisted summaries backed by live production data — not a cached export, not a third-party data lake.
+
+**Manufacturing — supply chain decisions**
+Your ERP runs on Java. Write a tool that queries inventory, lead times, and open purchase orders. A planner asks "Can we fulfill this order by Friday?" — the AI calls your system and reasons over real numbers.
+
+**Government / 公部門 — internal knowledge retrieval**
+Expose document search and policy lookup as tools. Staff get AI-assisted access to official records without those records ever touching an external AI service.
 
 ---
 
@@ -35,7 +110,7 @@ Yet Java runs 20–30% of enterprise backends — financial services, insurance,
 ```
 java-mcp/
 ├── mcp-spring-boot-starter/   ← The library (add this as a dependency)
-└── mcp-server-java/           ← Sample app (3 working tools, ready to clone)
+└── mcp-server-java/           ← Working sample with 4 tools, ready to clone
 ```
 
 ---
@@ -117,28 +192,26 @@ public class MyTool implements McpTool {
 }
 ```
 
-That's it. The starter auto-discovers every `@Component` implementing `McpTool` and registers it — no manual wiring required.
+The starter auto-discovers every `@Component` implementing `McpTool` — no manual registration required.
 
 ---
 
 ## Transport Modes
 
-### stdio (default — for Claude Desktop)
+### stdio (default — Claude Desktop, local tools)
 
-The server reads JSON-RPC from stdin and writes to stdout. This is the standard transport for local MCP clients.
+The server reads JSON-RPC from stdin and writes to stdout. Standard transport for local MCP clients.
 
 ```properties
-# application.properties (default, no change needed)
 spring.main.web-application-type=none
 mcp.server.transport=stdio
 ```
 
-### SSE (HTTP — for cloud deployment)
+### SSE (HTTP — internal servers, cloud deployment)
 
-The server exposes `GET /sse` and `POST /message` HTTP endpoints. Use this when deploying to a cloud platform.
+Exposes `GET /sse` and `POST /message` HTTP endpoints. Use when the MCP server runs on a shared server or internal platform rather than each user's local machine.
 
 ```properties
-# application-sse.properties
 spring.main.web-application-type=servlet
 server.port=${PORT:8080}
 mcp.server.transport=sse
@@ -148,12 +221,10 @@ mcp.server.transport=sse
 java -jar mcp-server-java.jar --spring.profiles.active=sse
 ```
 
-**Live demo** (Render free tier):
+**Live demo** (Render free tier — first request may take ~30s to wake up):
 ```
 GET https://mcp-server-java-ffs4.onrender.com/sse
 ```
-
-> Note: free tier spins down after 15 min inactivity — first request may take ~30s to wake up.
 
 ---
 
@@ -161,13 +232,13 @@ GET https://mcp-server-java-ffs4.onrender.com/sse
 
 | Component | What it does |
 |-----------|-------------|
-| `ObjectMapper` | JSON serialisation for JSON-RPC messages |
-| `ToolRegistry` | Collects all `McpTool` beans from the Spring context |
+| `ToolRegistry` | Discovers all `McpTool` beans from the Spring context |
 | `RequestHandler` | JSON-RPC 2.0 dispatcher (`initialize`, `tools/list`, `tools/call`, `ping`) |
 | `McpServer` | stdio transport — reads from stdin, writes to stdout |
 | `SseMcpServer` | SSE transport — `GET /sse` + `POST /message` HTTP endpoints |
+| `ObjectMapper` | JSON serialisation for all JSON-RPC messages |
 
-All beans are `@ConditionalOnMissingBean`, so you can override any of them.
+All beans are `@ConditionalOnMissingBean` — override any of them with your own implementation.
 
 ---
 
@@ -177,58 +248,42 @@ All beans are `@ConditionalOnMissingBean`, so you can override any of them.
 mcp.server.name=my-mcp-server           # default: mcp-server-java
 mcp.server.version=1.0.0                # default: 0.1.0
 mcp.server.protocol-version=2024-11-05  # default: 2024-11-05
-mcp.server.transport=stdio              # default: stdio | sse
+mcp.server.transport=stdio              # stdio | sse
 
-# News tool — add any RSS feed (RSS 2.0 or Atom both supported)
+# News tool RSS sources (RSS 2.0 and Atom both supported)
 mcp.tools.news.rss-urls[0]=https://news.ltn.com.tw/rss/all.xml
 mcp.tools.news.rss-urls[1]=https://news.pts.org.tw/xml/newsfeed.xml
+mcp.tools.news.rss-urls[2]=https://public.twreporter.org/rss/twreporter-rss.xml
 ```
 
 ---
 
 ## Sample App
 
-`mcp-server-java/` is a ready-to-run example with three tools:
+`mcp-server-java/` is a ready-to-run example demonstrating the integration pattern with 4 working tools:
 
 | Tool | What it does |
 |------|-------------|
-| `echo` | Echoes back the input — useful for verifying the connection |
-| `get_time` | Returns the current time in any IANA timezone |
-| `search_taiwan_news` | Searches Taiwan news by keyword across configurable RSS sources |
+| `echo` | Echoes input — verifies the MCP connection end-to-end |
+| `get_time` | Returns current time in any IANA timezone |
+| `search_taiwan_news` | Searches Taiwan news by keyword across configurable RSS sources (自由時報, 公視, 報導者) |
+| `search_cna_news` | Searches 中央社 real-time news via their JSON API |
 
-The news tool supports multiple RSS feeds (RSS 2.0 and Atom) and aggregates results from all sources, deduplicating by title. Default sources: 自由時報 + 公視.
-
-### Build & run (stdio)
+### Build & run
 
 ```bash
 # Requirements: JDK 21, Maven 3.9+
 git clone https://github.com/jimmyhusaas/mcp-server-java.git
 cd mcp-server-java
-
 mvn install
-cd mcp-server-java
-./scripts/smoke-test.sh
+
+# Smoke test — fires 5 JSON-RPC messages and checks responses
+cd mcp-server-java && ./scripts/smoke-test.sh
 ```
-
-### Run as HTTP server (SSE)
-
-```bash
-mvn package -DskipTests
-java -jar mcp-server-java/target/mcp-server-java-0.1.0.jar --spring.profiles.active=sse
-# Server starts on http://localhost:8080
-# SSE endpoint: GET http://localhost:8080/sse
-```
-
-### Deploy to Render (free)
-
-1. Fork this repo
-2. Create a new Web Service on [render.com](https://render.com) → connect your fork
-3. Runtime: **Docker**, Branch: **main**, Instance: **Free**
-4. Deploy — Render detects the `Dockerfile` automatically
 
 ### Connect to Claude Desktop
 
-Edit Claude Desktop's config file:
+Edit Claude Desktop's config:
 
 - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
@@ -247,19 +302,19 @@ Edit Claude Desktop's config file:
 }
 ```
 
-Restart Claude Desktop. In a new chat, try:
+Restart Claude Desktop. In a new chat:
 
-> Use the search_taiwan_news tool to find news about 台北
+> Use search_cna_news to find news about 半導體
 
 ---
 
 ## Tests
 
 ```bash
-mvn test          # runs all 54 unit tests across both modules
+mvn test    # 65 unit tests across both modules
 ```
 
-Tests are pure unit tests — no Spring context started, no HTTP calls. The tool tests stub `fetchXml()` with fixture XML so they run offline. Atom and RSS 2.0 feed formats are both covered.
+Pure unit tests — no Spring context, no HTTP calls. Tool tests stub network calls with fixture data and run fully offline.
 
 ---
 
@@ -267,7 +322,8 @@ Tests are pure unit tests — no Spring context started, no HTTP calls. The tool
 
 - [x] SSE transport — deploy the server to the cloud
 - [x] Configurable RSS sources — bring your own feeds
-- [x] Atom feed support — works with 公視 and other Atom-format sources
+- [x] Atom feed support
+- [x] 中央社 JSON API integration
 - [ ] `@McpTool` annotation — auto-generate JSON Schema from method signatures
 - [ ] Publish to Maven Central
 
